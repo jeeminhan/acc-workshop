@@ -359,7 +359,13 @@ function EmpathyFlow({ personas, onSyncFail }) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showSample, setShowSample] = useState(false);
+  const [stickies, setStickies] = useState([]);
   const persona = personas.find(p => p.id === personaId);
+
+  usePoll(async () => {
+    const s = await sGet(STORAGE_KEYS.empathy);
+    if (Array.isArray(s)) setStickies(s);
+  }, []);
 
   // If persona evaporates from settings while we have it selected, recover.
   useEffect(() => {
@@ -463,16 +469,24 @@ function EmpathyFlow({ personas, onSyncFail }) {
         </div>
         <StepHeader n={2} total={3} title="Pick a quadrant" subtitle="選擇一格" className="mt-5" />
         <div className="grid grid-cols-2 gap-2.5 mt-4">
-          {QUADRANTS.map((q, i) => (
-            <button key={q.id}
-              onClick={() => { setQuadrant(q.id); setStep("text"); }}
-              className={`bg-white border border-[#e8dfd0] rounded-2xl p-4 text-left active:scale-[0.99] transition-transform ${i === 4 ? "col-span-2" : ""}`}
-              style={{ minHeight: 88 }}>
-              <div className="font-serif-display text-base font-medium">{q.en}</div>
-              <div className="font-ui text-xs text-[#7a6a5a] mt-0.5">{q.zh}</div>
-              <div className="font-ui text-[11px] text-[#9a8a7a] mt-2 leading-snug">{q.hint}</div>
-            </button>
-          ))}
+          {QUADRANTS.map((q, i) => {
+            const count = stickies.filter(s => s.personaId === personaId && s.quadrant === q.id).length;
+            return (
+              <button key={q.id}
+                onClick={() => { setQuadrant(q.id); setStep("text"); }}
+                className={`bg-white border border-[#e8dfd0] rounded-2xl p-4 text-left active:scale-[0.99] transition-transform relative ${i === 4 ? "col-span-2" : ""}`}
+                style={{ minHeight: 88 }}>
+                <div className="font-serif-display text-base font-medium">{q.en}</div>
+                <div className="font-ui text-xs text-[#7a6a5a] mt-0.5">{q.zh}</div>
+                <div className="font-ui text-[11px] text-[#9a8a7a] mt-2 leading-snug">{q.hint}</div>
+                {count > 0 && (
+                  <div className="absolute top-3 right-3 bg-[#0d6e6e]/10 text-[#0d6e6e] rounded-full px-1.5 py-0.5 font-ui text-[10px] font-semibold">
+                    {count}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -480,6 +494,7 @@ function EmpathyFlow({ personas, onSyncFail }) {
 
   // step === "text"
   const q = QUADRANTS.find(x => x.id === quadrant);
+  const existingStickies = stickies.filter(s => s.personaId === personaId && s.quadrant === quadrant);
   return (
     <div>
       <BackButton onClick={() => setStep("quadrant")} />
@@ -490,6 +505,21 @@ function EmpathyFlow({ personas, onSyncFail }) {
           <div className="font-ui text-xs text-[#0d6e6e]">{q.en} · {q.zh}</div>
         </div>
       </div>
+      {existingStickies.length > 0 && (
+        <div className="mt-4">
+          <div className="font-ui text-[10px] uppercase tracking-widest text-[#0d6e6e] font-semibold mb-1.5">
+            Already posted · 已提交 ({existingStickies.length})
+          </div>
+          <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-0.5">
+            {existingStickies.map(s => (
+              <div key={s.id} className="rounded-xl px-3 py-2 font-ui text-xs leading-snug"
+                style={{ background: STICKY_PALETTE[s.color % STICKY_PALETTE.length].bg, color: STICKY_PALETTE[s.color % STICKY_PALETTE.length].ink }}>
+                {s.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <StepHeader n={3} total={3} title="Write a sticky" subtitle="寫下你的觀察" className="mt-5" />
       <p className="font-ui text-sm text-[#7a6a5a] mt-1 mb-3">{q.hint}.</p>
       <StickyInput value={text} onChange={setText} disabled={submitting} placeholder={`What might ${persona.name} ${q.en.toLowerCase()}?`} />

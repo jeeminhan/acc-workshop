@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: #ece6db;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-serif-display {
+  font-family: 'Fraunces', Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+.label {
+  font: 500 12px/1 'Inter', system-ui, sans-serif;
+  color: #6a5a48;
+  letter-spacing: 0.02em;
+}
+
+.frame-shadow {
+  box-shadow:
+    0 30px 80px rgba(40, 30, 20, 0.18),
+    0 0 0 1px rgba(40, 30, 20, 0.06);
+}

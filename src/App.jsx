@@ -357,7 +357,7 @@ function ParticipantApp({ onExit }) {
 
 /* — Empathy flow: persona → quadrant → text — */
 function EmpathyFlow({ personas, onSyncFail }) {
-  const [step, setStep] = useState("persona"); // persona | quadrant | text | done
+  const [step, setStep] = useState("persona"); // persona | compose | done
   const [personaId, setPersonaId] = useState(null);
   const [quadrant, setQuadrant] = useState(null);
   const [text, setText] = useState("");
@@ -417,7 +417,7 @@ function EmpathyFlow({ personas, onSyncFail }) {
     // Return to step 2 (quadrant) for the same persona — most participants
     // stay with one persona and add several stickies across quadrants.
     return <PostedScreen
-      onAnother={() => { setStep("quadrant"); setQuadrant(null); setText(""); }}
+      onAnother={() => { setStep("compose"); setQuadrant(null); setText(""); }}
       onSwitchPerson={() => { setStep("persona"); setPersonaId(null); setQuadrant(null); setText(""); }}
       personaName={persona ? persona.name : null}
     />;
@@ -426,7 +426,7 @@ function EmpathyFlow({ personas, onSyncFail }) {
   if (step === "persona") {
     return (
       <div>
-        <StepHeader n={1} total={3} title="Pick a person" subtitle="選擇一位" />
+        <StepHeader n={1} total={2} title="Pick a person" subtitle="選擇一位" />
         <button
           onClick={() => setShowSample(true)}
           className="mt-3 w-full bg-[#0d6e6e]/8 border border-[#0d6e6e]/20 rounded-xl px-3 py-2.5 flex items-center justify-between font-ui text-xs text-[#0d6e6e] hover:bg-[#0d6e6e]/12 transition-colors">
@@ -439,7 +439,7 @@ function EmpathyFlow({ personas, onSyncFail }) {
         <div className="grid grid-cols-1 gap-2.5 mt-4">
           {personas.map(p => (
             <button key={p.id}
-              onClick={() => { setPersonaId(p.id); setStep("quadrant"); }}
+              onClick={() => { setPersonaId(p.id); setStep("compose"); }}
               className="bg-white border border-[#e8dfd0] rounded-2xl p-4 text-left active:scale-[0.99] transition-transform flex gap-3 items-start"
               style={{ minHeight: 76 }}>
               <div className="text-3xl leading-none flex-shrink-0 mt-0.5">{p.emoji}</div>
@@ -460,62 +460,60 @@ function EmpathyFlow({ personas, onSyncFail }) {
     );
   }
 
-  if (step === "quadrant") {
-    return (
-      <div>
-        <BackButton onClick={() => setStep("persona")} />
-        <div className="bg-white border border-[#e8dfd0] rounded-2xl p-3 flex gap-3 items-center mt-2">
-          <div className="text-2xl">{persona.emoji}</div>
-          <div className="flex-1 min-w-0">
-            <div className="font-serif-display text-base font-medium">{persona.name} {persona.nameZh && <span className="font-ui text-sm text-[#7a6a5a] ml-1">{persona.nameZh}</span>}</div>
-            <div className="font-ui text-xs text-[#7a6a5a] line-clamp-2">{persona.description}</div>
-          </div>
-        </div>
-        <StepHeader n={2} total={3} title="Pick a quadrant" subtitle="選擇一格" className="mt-5" />
-        <div className="grid grid-cols-2 gap-2.5 mt-4">
-          {QUADRANTS.map((q, i) => {
-            const count = stickies.filter(s => s.personaId === personaId && s.quadrant === q.id).length;
-            return (
-              <button key={q.id}
-                onClick={() => { setQuadrant(q.id); setStep("text"); }}
-                className={`bg-white border border-[#e8dfd0] rounded-2xl p-4 text-left active:scale-[0.99] transition-transform relative ${i === 4 ? "col-span-2" : ""}`}
-                style={{ minHeight: 88 }}>
-                <div className="font-serif-display text-base font-medium">{q.en}</div>
-                <div className="font-ui text-xs text-[#7a6a5a] mt-0.5">{q.zh}</div>
-                <div className="font-ui text-[11px] text-[#9a8a7a] mt-2 leading-snug">{q.hint}</div>
-                {count > 0 && (
-                  <div className="absolute top-3 right-3 bg-[#0d6e6e]/10 text-[#0d6e6e] rounded-full px-1.5 py-0.5 font-ui text-[10px] font-semibold">
-                    {count}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // step === "text"
-  const q = QUADRANTS.find(x => x.id === quadrant);
-  const existingStickies = stickies.filter(s => s.personaId === personaId && s.quadrant === quadrant);
+  // step === "compose" — pick a quadrant + write a sticky in one screen
+  const selectedQ = quadrant ? QUADRANTS.find(x => x.id === quadrant) : null;
+  const existingForSelected = quadrant
+    ? stickies.filter(s => s.personaId === personaId && s.quadrant === quadrant)
+    : [];
   return (
     <div>
-      <BackButton onClick={() => setStep("quadrant")} />
+      <BackButton onClick={() => { setStep("persona"); setQuadrant(null); setText(""); }} />
       <div className="bg-white border border-[#e8dfd0] rounded-2xl p-3 flex gap-3 items-center mt-2">
         <div className="text-2xl">{persona.emoji}</div>
         <div className="flex-1 min-w-0">
-          <div className="font-serif-display text-base font-medium">{persona.name}</div>
-          <div className="font-ui text-xs text-[#0d6e6e]">{q.en} · {q.zh}</div>
+          <div className="font-serif-display text-base font-medium">
+            {persona.name}
+            {persona.nameZh && <span className="font-ui text-sm text-[#7a6a5a] ml-1">{persona.nameZh}</span>}
+          </div>
+          <div className="font-ui text-xs text-[#7a6a5a] line-clamp-2">{persona.description}</div>
         </div>
       </div>
-      {existingStickies.length > 0 && (
+      <StepHeader n={2} total={2} title="Add an observation" subtitle="新增觀察" className="mt-5" />
+      <p className="font-ui text-xs text-[#7a6a5a] mt-1 mb-3">Tap a quadrant, then write a sticky · 點選一格再寫</p>
+      <div className="grid grid-cols-2 gap-2 mt-1">
+        {QUADRANTS.map((q) => {
+          const isActive = q.id === quadrant;
+          const count = stickies.filter(s => s.personaId === personaId && s.quadrant === q.id).length;
+          return (
+            <button key={q.id}
+              onClick={() => setQuadrant(q.id)}
+              className={`relative rounded-2xl p-3 text-left active:scale-[0.99] transition-all border ${
+                isActive
+                  ? "bg-[#0d6e6e] border-[#0d6e6e] text-white shadow-md"
+                  : "bg-white border-[#e8dfd0] text-[#2a251f]"
+              }`}
+              style={{ minHeight: 92 }}>
+              <div className="font-serif-display text-base font-medium">{q.en}</div>
+              <div className={`font-ui text-xs mt-0.5 ${isActive ? "text-white/85" : "text-[#7a6a5a]"}`}>{q.zh}</div>
+              <div className={`font-ui text-[11px] mt-1.5 leading-snug ${isActive ? "text-white/75" : "text-[#9a8a7a]"}`}>{q.hint}</div>
+              {count > 0 && (
+                <div className={`absolute top-2 right-2 rounded-full px-1.5 py-0.5 font-ui text-[10px] font-semibold ${
+                  isActive ? "bg-white/20 text-white" : "bg-[#0d6e6e]/10 text-[#0d6e6e]"
+                }`}>
+                  {count}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {existingForSelected.length > 0 && (
         <div className="mt-4">
           <div className="font-ui text-[10px] uppercase tracking-widest text-[#0d6e6e] font-semibold mb-1.5">
-            Already posted · 已提交 ({existingStickies.length})
+            Already posted in {selectedQ.en} · 已提交 ({existingForSelected.length})
           </div>
-          <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-0.5">
-            {existingStickies.map(s => (
+          <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto pr-0.5">
+            {existingForSelected.map(s => (
               <div key={s.id} className="rounded-xl px-3 py-2 font-ui text-xs leading-snug"
                 style={{ background: STICKY_PALETTE[s.color % STICKY_PALETTE.length].bg, color: STICKY_PALETTE[s.color % STICKY_PALETTE.length].ink }}>
                 {s.text}
@@ -524,10 +522,14 @@ function EmpathyFlow({ personas, onSyncFail }) {
           </div>
         </div>
       )}
-      <StepHeader n={3} total={3} title="Write a sticky" subtitle="寫下你的觀察" className="mt-5" />
-      <p className="font-ui text-sm text-[#7a6a5a] mt-1 mb-3">{q.hint}.</p>
-      <StickyInput value={text} onChange={setText} disabled={submitting} placeholder={`What might ${persona.name} ${q.en.toLowerCase()}?`} />
-      <BigSubmit onClick={submit} disabled={!text.trim() || submitting} loading={submitting} />
+      <div className="mt-4">
+        <StickyInput
+          value={text}
+          onChange={setText}
+          disabled={submitting || !quadrant}
+          placeholder={selectedQ ? `What might ${persona.name} ${selectedQ.en.toLowerCase()}?` : "Pick a quadrant above first · 先選一格"} />
+      </div>
+      <BigSubmit onClick={submit} disabled={!quadrant || !text.trim() || submitting} loading={submitting} />
     </div>
   );
 }

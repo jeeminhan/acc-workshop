@@ -294,6 +294,7 @@ function ParticipantApp({ onExit }) {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("synced"); // synced | retrying | offline
   const [parkingOverlay, setParkingOverlay] = useState(false);
+  const [back, setBack] = useState(null); // null | () => void — registered by the active flow
 
   usePoll(async () => {
     const [b, p] = await Promise.all([sGet(STORAGE_KEYS.active), sGet(STORAGE_KEYS.personas)]);
@@ -311,7 +312,12 @@ function ParticipantApp({ onExit }) {
     <div className="min-h-screen flex flex-col bg-[#faf6f0]">
       {/* sticky header */}
       <header className="sticky top-0 z-20 bg-[#faf6f0]/95 backdrop-blur-sm border-b border-[#e8dfd0]">
-        <div className="px-4 py-2.5 flex items-center justify-end">
+        <div className="px-4 py-2.5 flex items-center justify-between min-h-[32px]">
+          {back ? (
+            <button onClick={back} className="font-ui text-xs text-[#0d6e6e] hover:text-[#0a5252] flex items-center gap-1 -ml-1 px-1 py-0.5">
+              <ChevronLeft size={14} /> Back · 返回
+            </button>
+          ) : <span />}
           <SyncDot status={syncStatus} />
         </div>
         <div className="px-4 pb-3 pt-1">
@@ -326,10 +332,10 @@ function ParticipantApp({ onExit }) {
 
       {/* board-specific flow */}
       <main className="flex-1 px-4 py-5 pb-28">
-        {board.id === "empathy"     && <EmpathyFlow personas={personas} onSyncFail={() => setSyncStatus("retrying")} />}
+        {board.id === "empathy"     && <EmpathyFlow personas={personas} onSyncFail={() => setSyncStatus("retrying")} setBack={setBack} />}
         {board.id === "parking"     && <SimpleFlow boardId="parking"     storageKey={STORAGE_KEYS.parking}     promptEn={board.prompt} longEn={board.longEn} longZh={board.longZh} />}
         {board.id === "reflections" && <SimpleFlow boardId="reflections" storageKey={STORAGE_KEYS.reflections} promptEn={board.prompt} />}
-        {board.id === "practices"   && <PracticesFlow />}
+        {board.id === "practices"   && <PracticesFlow setBack={setBack} />}
         {board.id === "commitments" && <SimpleFlow boardId="commitments" storageKey={STORAGE_KEYS.commitments} promptEn={board.prompt} />}
       </main>
 
@@ -353,7 +359,7 @@ function ParticipantApp({ onExit }) {
 }
 
 /* — Empathy flow: persona → quadrant → text — */
-function EmpathyFlow({ personas, onSyncFail }) {
+function EmpathyFlow({ personas, onSyncFail, setBack }) {
   const [step, setStep] = useState("persona"); // persona | compose
   const [personaId, setPersonaId] = useState(null);
   const [quadrant, setQuadrant] = useState(null);
@@ -362,6 +368,18 @@ function EmpathyFlow({ personas, onSyncFail }) {
   const [showSample, setShowSample] = useState(false);
   const [stickies, setStickies] = useState([]);
   const [posted, setPosted] = useState(false);
+
+  // Register back-handler with the participant header.
+  useEffect(() => {
+    if (!setBack) return;
+    if (step === "compose") {
+      const handler = () => { setStep("persona"); setQuadrant(null); setText(""); };
+      setBack(() => handler);
+    } else {
+      setBack(null);
+    }
+    return () => setBack(null);
+  }, [step, setBack]);
   const persona = personas.find(p => p.id === personaId);
 
   usePoll(async () => {
@@ -456,8 +474,7 @@ function EmpathyFlow({ personas, onSyncFail }) {
     : [];
   return (
     <div>
-      <BackButton onClick={() => { setStep("persona"); setQuadrant(null); setText(""); }} />
-      <div className="bg-white border border-[#e8dfd0] rounded-2xl p-3 flex gap-3 items-center mt-2">
+      <div className="bg-white border border-[#e8dfd0] rounded-2xl p-3 flex gap-3 items-center">
         <div className="text-2xl">{persona.emoji}</div>
         <div className="flex-1 min-w-0">
           <div className="font-serif-display text-base font-medium">
@@ -501,7 +518,7 @@ function EmpathyFlow({ personas, onSyncFail }) {
           <div className="font-ui text-[10px] uppercase tracking-widest text-[#0d6e6e] font-semibold mb-1.5">
             Already posted in {selectedQ.en} · 已提交 ({existingForSelected.length})
           </div>
-          <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto pr-0.5">
+          <div className="flex flex-col gap-1.5">
             {existingForSelected.map(s => (
               <div key={s.id} className="rounded-xl px-3 py-2 font-ui text-xs leading-snug"
                 style={{ background: STICKY_PALETTE[s.color % STICKY_PALETTE.length].bg, color: STICKY_PALETTE[s.color % STICKY_PALETTE.length].ink }}>
@@ -621,7 +638,7 @@ function SimpleFlow({ boardId, storageKey, promptEn, longEn, longZh }) {
 }
 
 /* — Practices: column → text — */
-function PracticesFlow() {
+function PracticesFlow({ setBack }) {
   const [col, setCol] = useState(null);
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -634,6 +651,17 @@ function PracticesFlow() {
     })();
   }, []);
   useEffect(() => { sSet(STORAGE_KEYS.draft, { board: "practices", column: col, text }, { shared: false }); }, [col, text]);
+
+  useEffect(() => {
+    if (!setBack) return;
+    if (col) {
+      const handler = () => setCol(null);
+      setBack(() => handler);
+    } else {
+      setBack(null);
+    }
+    return () => setBack(null);
+  }, [col, setBack]);
 
   if (!col) {
     return (
@@ -671,8 +699,7 @@ function PracticesFlow() {
 
   return (
     <div>
-      <BackButton onClick={() => setCol(null)} />
-      <div className="bg-white border border-[#e8dfd0] rounded-2xl p-3 mt-2">
+      <div className="bg-white border border-[#e8dfd0] rounded-2xl p-3">
         <div className="font-serif-display text-base font-medium">{colMeta.en} · <span className="font-ui text-sm text-[#7a6a5a]">{colMeta.zh}</span></div>
         <div className="font-ui text-xs text-[#0d6e6e] mt-0.5">{colMeta.prompt}</div>
       </div>

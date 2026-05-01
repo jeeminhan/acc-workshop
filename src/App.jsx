@@ -148,7 +148,11 @@ const CAMPUS_LABEL = {
    ROOT — view router
    ───────────────────────────────────────────────────────────── */
 export default function ACCWorkshop() {
-  const [view, setView] = useState("landing"); // landing | participant | facilitator
+  const [view, setView] = useState(() => {
+    if (typeof window === "undefined") return "landing";
+    const role = new URLSearchParams(window.location.search).get("role");
+    return role === "participant" || role === "facilitator" ? role : "landing";
+  }); // landing | participant | facilitator
   const [bootError, setBootError] = useState(null);
 
   // Lazy-init personas if missing.
@@ -1363,7 +1367,16 @@ function QRPanel({ onClose }) {
   const ref = useRef(null);
   const [url, setUrl] = useState("");
   useEffect(() => {
-    const u = (typeof window !== "undefined" && window.location?.href) || "";
+    let u = "";
+    if (typeof window !== "undefined") {
+      try {
+        const link = new URL(window.location.href);
+        link.searchParams.set("role", "participant");
+        u = link.toString();
+      } catch {
+        u = window.location?.href || "";
+      }
+    }
     setUrl(u);
     // qrcode-generator UMD attaches `qrcode` to window. Load it once.
     const renderInto = (el) => {

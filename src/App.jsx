@@ -311,10 +311,7 @@ function ParticipantApp({ onExit }) {
     <div className="min-h-screen flex flex-col bg-[#faf6f0]">
       {/* sticky header */}
       <header className="sticky top-0 z-20 bg-[#faf6f0]/95 backdrop-blur-sm border-b border-[#e8dfd0]">
-        <div className="px-4 py-2.5 flex items-center justify-between">
-          <button onClick={onExit} className="font-ui text-xs text-[#7a6a5a] hover:text-[#0d6e6e] flex items-center gap-1">
-            <ChevronLeft size={14} /> Exit
-          </button>
+        <div className="px-4 py-2.5 flex items-center justify-end">
           <SyncDot status={syncStatus} />
         </div>
         <div className="px-4 pb-3 pt-1">
@@ -357,13 +354,14 @@ function ParticipantApp({ onExit }) {
 
 /* — Empathy flow: persona → quadrant → text — */
 function EmpathyFlow({ personas, onSyncFail }) {
-  const [step, setStep] = useState("persona"); // persona | compose | done
+  const [step, setStep] = useState("persona"); // persona | compose
   const [personaId, setPersonaId] = useState(null);
   const [quadrant, setQuadrant] = useState(null);
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showSample, setShowSample] = useState(false);
   const [stickies, setStickies] = useState([]);
+  const [posted, setPosted] = useState(false);
   const persona = personas.find(p => p.id === personaId);
 
   usePoll(async () => {
@@ -410,18 +408,9 @@ function EmpathyFlow({ personas, onSyncFail }) {
     setSubmitting(false);
     if (!ok) { onSyncFail && onSyncFail(); return; }
     sSet(STORAGE_KEYS.draft, null, { shared: false });
-    setStep("done");
+    setText("");
+    setPosted(true);
   };
-
-  if (step === "done") {
-    // Return to step 2 (quadrant) for the same persona — most participants
-    // stay with one persona and add several stickies across quadrants.
-    return <PostedScreen
-      onAnother={() => { setStep("compose"); setQuadrant(null); setText(""); }}
-      onSwitchPerson={() => { setStep("persona"); setPersonaId(null); setQuadrant(null); setText(""); }}
-      personaName={persona ? persona.name : null}
-    />;
-  }
 
   if (step === "persona") {
     return (
@@ -530,6 +519,19 @@ function EmpathyFlow({ personas, onSyncFail }) {
           placeholder={selectedQ ? `What might ${persona.name} ${selectedQ.en.toLowerCase()}?` : "Pick a quadrant above first · 先選一格"} />
       </div>
       <BigSubmit onClick={submit} disabled={!quadrant || !text.trim() || submitting} loading={submitting} />
+      {posted && (
+        <PostedModal
+          personaName={persona ? persona.name : null}
+          onAnother={() => setPosted(false)}
+          onSwitchPerson={() => {
+            setPosted(false);
+            setStep("persona");
+            setPersonaId(null);
+            setQuadrant(null);
+            setText("");
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -571,12 +573,12 @@ function SimpleFlow({ boardId, storageKey, promptEn, longEn, longZh }) {
     const next = [...(Array.isArray(cur) ? cur : []), sticky];
     await sSetWithRetry(storageKey, next);
     sSet(STORAGE_KEYS.draft, null, { shared: false });
-    setSubmitting(false); setDone(true);
+    setSubmitting(false); setText(""); setDone(true);
   };
 
-  if (done) return <PostedScreen onAnother={() => { setText(""); setDone(false); }} />;
   return (
     <div>
+      {done && <PostedModal onAnother={() => setDone(false)} />}
       <p className="font-ui text-base text-[#5a4a3a] leading-relaxed mb-3">{promptEn}</p>
       {longEn && (
         <details className="bg-[#0d6e6e]/6 border border-[#0d6e6e]/15 rounded-xl px-3 py-2 mb-4 group">
@@ -633,7 +635,6 @@ function PracticesFlow() {
   }, []);
   useEffect(() => { sSet(STORAGE_KEYS.draft, { board: "practices", column: col, text }, { shared: false }); }, [col, text]);
 
-  if (done) return <PostedScreen onAnother={() => { setCol(null); setText(""); setDone(false); }} />;
   if (!col) {
     return (
       <div>
@@ -665,7 +666,7 @@ function PracticesFlow() {
     const next = [...(Array.isArray(cur) ? cur : []), sticky];
     await sSetWithRetry(STORAGE_KEYS.practices, next);
     sSet(STORAGE_KEYS.draft, null, { shared: false });
-    setSubmitting(false); setDone(true);
+    setSubmitting(false); setText(""); setDone(true);
   };
 
   return (
@@ -678,6 +679,7 @@ function PracticesFlow() {
       <StepHeader n={2} total={2} title="Your proposal" subtitle="你的提案" className="mt-5" />
       <StickyInput value={text} onChange={setText} disabled={submitting} placeholder={colMeta.example.replace(/^e\.g\. /, "")} />
       <BigSubmit onClick={submit} disabled={!text.trim() || submitting} loading={submitting} />
+      {done && <PostedModal onAnother={() => setDone(false)} />}
     </div>
   );
 }
@@ -768,6 +770,36 @@ function BigSubmit({ onClick, disabled, loading, label = "Post sticky · 送出"
     </button>
   );
 }
+function PostedModal({ onAnother, onSwitchPerson, personaName }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onAnother(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onAnother]);
+  return (
+    <div className="fixed inset-0 z-40 bg-[#2a251f]/40 backdrop-blur-sm flex items-center justify-center p-6 sticky-in" onClick={onAnother}>
+      <div className="bg-[#faf6f0] rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="w-14 h-14 rounded-full bg-[#0d6e6e]/10 mx-auto flex items-center justify-center mb-3">
+          <CheckCircle2 size={26} className="text-[#0d6e6e]" />
+        </div>
+        <div className="font-serif-display text-2xl font-medium">Posted!</div>
+        <div className="font-ui text-sm text-[#7a6a5a] mt-1 mb-5">已提交 · It will appear on the screen in a moment.</div>
+        <button onClick={onAnother}
+          className="w-full px-6 py-3 rounded-2xl bg-[#0d6e6e] text-white font-ui text-sm font-medium inline-flex items-center justify-center gap-2 active:scale-[0.99] transition-transform">
+          <Plus size={16} />
+          {personaName ? <>Add another for {personaName} · 再寫一張</> : <>Add another · 再寫一張</>}
+        </button>
+        {onSwitchPerson && (
+          <button onClick={onSwitchPerson}
+            className="mt-3 px-4 py-2 rounded-full font-ui text-xs text-[#7a6a5a] hover:text-[#0d6e6e]">
+            Switch to a different person · 換一位
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PostedScreen({ onAnother, onSwitchPerson, personaName }) {
   return (
     <div className="py-10 text-center">

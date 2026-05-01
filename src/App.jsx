@@ -953,26 +953,25 @@ function FacilitatorApp({ onExit }) {
   return (
     <div className="min-h-screen flex flex-col bg-[#faf6f0]">
       {/* TOP BAR */}
-      <header className="sticky top-0 z-30 bg-white border-b border-[#e8dfd0] flex items-center px-5 h-16">
-        <button onClick={onExit} className="font-ui text-xs text-[#7a6a5a] hover:text-[#0d6e6e] flex items-center gap-1 mr-5">
+      <header className="sticky top-0 z-30 bg-white border-b border-[#e8dfd0] flex items-center px-5 h-16 gap-4">
+        <button onClick={onExit} className="font-ui text-xs text-[#7a6a5a] hover:text-[#0d6e6e] flex items-center gap-1 flex-shrink-0">
           <ChevronLeft size={14} /> Exit
         </button>
-        <div className="font-serif-display text-lg font-medium mr-5">ACC Empathy Workshop</div>
-        <nav className="flex items-center gap-1">
+        <div className="font-serif-display text-lg font-medium whitespace-nowrap flex-shrink-0 hidden xl:block">ACC Empathy Workshop</div>
+        <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
           {BOARDS.map(b => {
             const Icon = b.icon;
             const on = b.id === active;
             return (
               <button key={b.id} onClick={() => setActiveBoard(b.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-ui font-medium transition-colors ${on ? "bg-[#0d6e6e] text-white" : "text-[#5a4a3a] hover:bg-[#f0e9dc]"}`}>
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-ui font-medium transition-colors flex-shrink-0 whitespace-nowrap ${on ? "bg-[#0d6e6e] text-white" : "text-[#5a4a3a] hover:bg-[#f0e9dc]"}`}>
                 <Icon size={14} /> {b.en}
                 <span className={`tabular-nums text-[11px] ml-0.5 px-1.5 py-0.5 rounded-full ${on ? "bg-white/20 text-white" : "bg-[#e8dfd0] text-[#7a6a5a]"}`}>{counts[b.id]}</span>
               </button>
             );
           })}
         </nav>
-        <div className="flex-1" />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <AgendaTimer />
           <button onClick={() => setShowPrompt(true)} className="px-3 py-1.5 rounded-lg text-sm font-ui text-[#5a4a3a] hover:bg-[#f0e9dc] flex items-center gap-1.5" title="Show prompt big">
             <Maximize2 size={14} /> Prompt

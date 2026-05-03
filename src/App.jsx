@@ -25,7 +25,14 @@ const STORAGE_KEYS = {
   commitments: "acc-stickies-commitments",
   draft: "acc-draft",
   agenda: "acc-agenda",
+  facilitatorLock: "acc-facilitator-lock",
 };
+
+// Facilitator single-driver lock. Heartbeat every 5s; lock is considered stale
+// (and freely takeable) after 15s without a heartbeat so a closed tab doesn't
+// block the next session.
+const FAC_LOCK_HEARTBEAT_MS = 5000;
+const FAC_LOCK_STALE_MS = 15000;
 
 async function sGet(key) {
   try {
@@ -618,7 +625,7 @@ function SimpleFlow({ boardId, storageKey, promptEn, longEn, longZh }) {
           <div className="font-ui text-[10px] uppercase tracking-widest text-[#0d6e6e] font-semibold mb-1.5">From the practice proposals · 從實踐提案</div>
           <div className="font-ui text-[11px] text-[#7a6a5a] mb-2">Tap to drop into your commitment.</div>
           <div className="flex flex-col gap-1.5">
-            {practiceSuggestions.slice(-12).reverse().map(s => {
+            {[...practiceSuggestions].reverse().map(s => {
               const colMeta = PRACTICE_COLS.find(c => c.id === s.column);
               return (
                 <button key={s.id}
@@ -973,6 +980,51 @@ function FacilitatorApp({ onExit }) {
   const [revealMode, setRevealMode] = useState(false);
   const [revealedIds, setRevealedIds] = useState({}); // {boardId: Set<id>}
 
+  // Single-facilitator lock — only one driver per workshop room at a time.
+  const sessionIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  const [lockStatus, setLockStatus] = useState("checking"); // checking | primary | pending | displaced
+
+  // Initial claim: take the lock if free or stale, otherwise queue as pending.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const lock = await sGet(STORAGE_KEYS.facilitatorLock);
+      if (cancelled) return;
+      const now = Date.now();
+      const fresh = lock && (now - (lock.lastSeen || 0)) <= FAC_LOCK_STALE_MS;
+      if (!fresh || lock.sessionId === sessionIdRef.current) {
+        await sSet(STORAGE_KEYS.facilitatorLock, { sessionId: sessionIdRef.current, lastSeen: now });
+        if (!cancelled) setLockStatus("primary");
+      } else {
+        if (!cancelled) setLockStatus("pending");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Heartbeat + watchdog — only when we hold the lock. If someone else writes a
+  // new session id we know we've been displaced.
+  useEffect(() => {
+    if (lockStatus !== "primary") return;
+    let cancelled = false;
+    const tick = async () => {
+      const lock = await sGet(STORAGE_KEYS.facilitatorLock);
+      if (cancelled) return;
+      if (lock && lock.sessionId && lock.sessionId !== sessionIdRef.current) {
+        setLockStatus("displaced");
+        return;
+      }
+      await sSet(STORAGE_KEYS.facilitatorLock, { sessionId: sessionIdRef.current, lastSeen: Date.now() });
+    };
+    const id = setInterval(tick, FAC_LOCK_HEARTBEAT_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [lockStatus]);
+
+  const takeOver = async () => {
+    await sSet(STORAGE_KEYS.facilitatorLock, { sessionId: sessionIdRef.current, lastSeen: Date.now() });
+    setLockStatus("primary");
+  };
+
   // Initial + polled load
   const refreshAll = useCallback(async () => {
     try {
@@ -1001,7 +1053,10 @@ function FacilitatorApp({ onExit }) {
     await sSetWithRetry(STORAGE_KEYS.active, id);
   };
 
-  if (loading) return <CenteredLoader label="Loading workshop…" />;
+  if (loading || lockStatus === "checking") return <CenteredLoader label="Loading workshop…" />;
+  if (lockStatus === "pending") {
+    return <FacilitatorLockModal mode="pending" onTakeOver={takeOver} onExit={onExit} />;
+  }
 
   const counts = {
     empathy: empathy.length, parking: parking.length, reflections: reflections.length,
@@ -1074,6 +1129,40 @@ function FacilitatorApp({ onExit }) {
                           revealMode={revealMode} setRevealMode={setRevealMode}
                           empathyMode={empathyMode} setEmpathyMode={setEmpathyMode} />}
       {showPrompt   && <BigPrompt board={board} onClose={() => setShowPrompt(false)} />}
+      {lockStatus === "displaced" && (
+        <FacilitatorLockModal mode="displaced" onTakeOver={takeOver} onExit={onExit} />
+      )}
+    </div>
+  );
+}
+
+function FacilitatorLockModal({ mode, onTakeOver, onExit }) {
+  const isPending = mode === "pending";
+  const title = isPending ? "Workshop already has a facilitator" : "You've been replaced";
+  const subtitle = isPending ? "已有主持人在進行中" : "另一位主持人接管了";
+  const body = isPending
+    ? "Only one facilitator should drive a workshop at a time. Taking over here will remove the other facilitator from the driver's seat."
+    : "Another tab took over as facilitator for this room. Take it back, or exit if that's intentional.";
+  return (
+    <div className="fixed inset-0 z-50 bg-[#2a251f]/70 backdrop-blur-sm flex items-center justify-center p-6">
+      <div className="bg-[#faf6f0] rounded-3xl p-8 max-w-md w-full shadow-2xl">
+        <div className="w-12 h-12 rounded-full bg-[#b8862e]/15 flex items-center justify-center mb-4">
+          <AlertCircle size={24} className="text-[#b8862e]" />
+        </div>
+        <div className="font-serif-display text-2xl font-medium leading-tight">{title}</div>
+        <div className="font-ui text-sm text-[#7a6a5a] mt-1">{subtitle}</div>
+        <p className="font-ui text-sm text-[#3a2c1c] mt-4 leading-relaxed">{body}</p>
+        <div className="mt-6 flex flex-col gap-2">
+          <button onClick={onTakeOver}
+            className="w-full px-5 py-3 rounded-2xl bg-[#0d6e6e] text-white font-ui text-sm font-medium active:scale-[0.99] transition-transform">
+            {isPending ? "Take over as facilitator · 接管" : "Take it back · 取回"}
+          </button>
+          <button onClick={onExit}
+            className="w-full px-5 py-2.5 rounded-2xl bg-transparent text-[#7a6a5a] font-ui text-sm hover:bg-[#f0e9dc] transition-colors">
+            Exit · 離開
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
